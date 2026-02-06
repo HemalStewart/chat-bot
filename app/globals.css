@@ -1,8 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* iOS Base Colors */
+  --background: #f5f7fa;
+  --foreground: #1d1d1f;
+
+  /* Liquid Glass Multi-Layer System */
+  --glass-ultra-light: rgba(255, 255, 255, 0.85);
+  --glass-light: rgba(255, 255, 255, 0.72);
+  --glass-medium: rgba(255, 255, 255, 0.58);
+  --glass-heavy: rgba(255, 255, 255, 0.42);
+
+  /* Borders & Strokes */
+  --glass-border-subtle: rgba(255, 255, 255, 0.6);
+  --glass-border-medium: rgba(255, 255, 255, 0.45);
+  --glass-border-strong: rgba(255, 255, 255, 0.8);
+
+  /* Shadows with Depth */
+  --glass-shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.02);
+  --glass-shadow-medium: 0 8px 32px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.03);
+  --glass-shadow-strong: 0 16px 48px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.04);
+  --glass-shadow-glow: 0 0 32px rgba(0, 122, 255, 0.15), 0 4px 16px rgba(0, 122, 255, 0.08);
+
+  /* Blur Tokens */
+  --blur-light: 16px;
+  --blur-medium: 24px;
+  --blur-heavy: 40px;
+  --blur-ultra: 60px;
+
+  /* iOS Accent */
+  --liquid-accent: #007aff;
+  --liquid-accent-light: rgba(0, 122, 255, 0.12);
+  --liquid-accent-medium: rgba(0, 122, 255, 0.24);
 }
 
 @theme inline {
@@ -12,15 +41,192 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Liquid Mesh Background with Subtle Animation */
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(0, 122, 255, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(88, 86, 214, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(175, 82, 222, 0.04) 0%, transparent 55%),
+    radial-gradient(circle at 20% 80%, rgba(52, 199, 89, 0.04) 0%, transparent 50%);
+  background-size: 200% 200%;
+  animation: liquidMesh 20s ease-in-out infinite;
+}
+
+@keyframes liquidMesh {
+  0%,
+  100% {
+    background-position: 0% 0%;
+  }
+
+  50% {
+    background-position: 100% 100%;
+  }
+}
+
+/* === iOS LIQUID GLASS UTILITIES === */
+
+.glass-panel {
+  background: var(--glass-light);
+  backdrop-filter: blur(var(--blur-medium)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-medium)) saturate(180%);
+  border: 1px solid var(--glass-border-subtle);
+  box-shadow: var(--glass-shadow-medium);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-ultra {
+  background: var(--glass-ultra-light);
+  backdrop-filter: blur(var(--blur-light)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-light)) saturate(200%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-soft);
+}
+
+.glass-heavy {
+  background: var(--glass-heavy);
+  backdrop-filter: blur(var(--blur-heavy)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur-heavy)) saturate(160%);
+  border: 1px solid var(--glass-border-medium);
+  box-shadow: var(--glass-shadow-strong);
+}
+
+/* === LIQUID MORPHING & HOVER EFFECTS === */
+
+.liquid-hover {
+  position: relative;
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.liquid-hover::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.liquid-hover:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--glass-shadow-strong), var(--glass-shadow-glow);
+}
+
+.liquid-hover:hover::before {
+  opacity: 1;
+}
+
+.liquid-hover:active {
+  transform: translateY(0) scale(0.98);
+  transition: all 0.15s ease;
+}
+
+/* === SPRING ANIMATIONS === */
+
+@keyframes springIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+
+  50% {
+    transform: scale(1.02) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes liquidPulse {
+  0%,
+  100% {
+    box-shadow: var(--glass-shadow-medium);
+  }
+
+  50% {
+    box-shadow: var(--glass-shadow-strong), var(--glass-shadow-glow);
+  }
+}
+
+.spring-enter {
+  animation: springIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.liquid-pulse {
+  animation: liquidPulse 2.5s ease-in-out infinite;
+}
+
+/* === SMOOTH TRANSITIONS === */
+
+.transition-liquid {
+  transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.transition-spring {
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.transition-smooth {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === GLOW EFFECTS === */
+
+.glow-accent {
+  box-shadow: 0 0 24px rgba(0, 122, 255, 0.2), 0 4px 16px rgba(0, 122, 255, 0.1);
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 32px rgba(0, 122, 255, 0.25), 0 8px 24px rgba(0, 122, 255, 0.15);
+}
+
+/* === SCROLLBAR STYLING === */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* === ACCESSIBILITY === */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
