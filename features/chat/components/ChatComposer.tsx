@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { FormEvent } from "react";
 
 export type ChatComposerProps = {
@@ -7,7 +8,8 @@ export type ChatComposerProps = {
   isLoading: boolean;
 };
 
-export const ChatComposer = ({ draft, onDraftChange, onSend, isLoading }: ChatComposerProps) => {
+export const ChatComposer = memo(
+  ({ draft, onDraftChange, onSend, isLoading }: ChatComposerProps) => {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSend();
@@ -48,4 +50,6 @@ export const ChatComposer = ({ draft, onDraftChange, onSend, isLoading }: ChatCo
       </div>
     </form>
   );
-};
+});
+
+ChatComposer.displayName = "ChatComposer";

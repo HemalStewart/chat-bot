@@ -145,10 +145,14 @@ export const useChatSession = () => {
 
     let hasStreamed = false;
     let assistantContent = "";
+    let pendingContent = "";
+    let rafId: number | null = null;
 
-    const appendToken = (token: string) => {
-      hasStreamed = true;
-      assistantContent += token;
+    const flushPending = () => {
+      rafId = null;
+      if (!pendingContent) return;
+      assistantContent += pendingContent;
+      pendingContent = "";
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantId
@@ -156,6 +160,43 @@ export const useChatSession = () => {
             : message
         )
       );
+    };
+
+    const scheduleFlush = () => {
+      if (rafId !== null) return;
+      if (typeof window !== "undefined" && "requestAnimationFrame" in window) {
+        rafId = window.requestAnimationFrame(flushPending);
+      } else {
+        rafId = window.setTimeout(flushPending, 16) as unknown as number;
+      }
+    };
+
+    const appendToken = (token: string) => {
+      hasStreamed = true;
+      pendingContent += token;
+      scheduleFlush();
+    };
+
+    const finalizeStream = () => {
+      if (rafId !== null) {
+        if (typeof window !== "undefined" && "cancelAnimationFrame" in window) {
+          window.cancelAnimationFrame(rafId);
+        } else {
+          clearTimeout(rafId);
+        }
+        rafId = null;
+      }
+      if (pendingContent) {
+        assistantContent += pendingContent;
+        pendingContent = "";
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
+              ? { ...message, content: assistantContent, sources }
+              : message
+          )
+        );
+      }
     };
 
     try {
@@ -173,6 +214,7 @@ export const useChatSession = () => {
       if (!hasStreamed) {
         throw new Error("Empty stream response.");
       }
+      finalizeStream();
 
       appendChatMessage({
         role: "assistant",
@@ -212,6 +254,7 @@ export const useChatSession = () => {
           setMessages((current) => current.filter((message) => message.id !== assistantId));
         }
       } else {
+        finalizeStream();
         const message = err instanceof Error ? err.message : "Request failed.";
         setError(message);
       }

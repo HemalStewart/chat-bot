@@ -1,7 +1,8 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-export const MarkdownMessage = ({ content }: { content: string }) => {
+export const MarkdownMessage = memo(({ content }: { content: string }) => {
   return (
     <div className="text-sm leading-6 text-foreground/80">
       <ReactMarkdown
@@ -34,4 +35,6 @@ export const MarkdownMessage = ({ content }: { content: string }) => {
       </ReactMarkdown>
     </div>
   );
-};
+});
+
+MarkdownMessage.displayName = "MarkdownMessage";
