@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  name      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  sources   String?
+  createdAt DateTime    @default(now())
+
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model ContextDoc {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PastPaper {
+  id        String             @id
+  year      Int
+  subject   String
+  title     String
+  source    String?
+  questions PastPaperQuestion[]
+}
+
+model PastPaperQuestion {
+  id            String         @id
+  paperId       String
+  number        String
+  prompt        String
+  topics        String?
+  markingScheme MarkingScheme?
+
+  paper         PastPaper      @relation(fields: [paperId], references: [id], onDelete: Cascade)
+}
+
+model MarkingScheme {
+  id         String            @id
+  questionId String            @unique
+  scheme     String
+  marks      Int
+
+  question   PastPaperQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}

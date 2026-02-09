@@ -9,3 +9,5 @@ export const defaultModels: Record<Provider, string> = {
   openai: "gpt-4o-mini",
   gemini: "gemini-2.5-flash",
 };
+
+export const defaultMaxTokens = 4096;

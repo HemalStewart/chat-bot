@@ -1,4 +1,6 @@
 import type { LocalMessage } from "@/features/chat/types";
+import { CitationList } from "@/features/chat/components/CitationList";
+import { MarkdownMessage } from "@/features/chat/components/MarkdownMessage";
 
 export type ChatTranscriptProps = {
   messages: LocalMessage[];
@@ -27,13 +29,20 @@ export const ChatTranscript = ({ messages, isLoading, error }: ChatTranscriptPro
             className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+              className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
                 message.role === "user"
                   ? "bg-blue-500 text-white"
-                  : "bg-white/80 text-foreground/80"
+                  : "bg-white/90 text-foreground/80"
               }`}
             >
-              {message.content}
+              {message.role === "assistant" ? (
+                <MarkdownMessage content={message.content} />
+              ) : (
+                <p className="text-sm leading-relaxed">{message.content}</p>
+              )}
+              {message.sources && message.sources.length > 0 && (
+                <CitationList sources={message.sources} />
+              )}
             </div>
           </div>
         ))}

@@ -16,12 +16,13 @@ export type ChatSidebarProps = {
   onSystemPromptChange: (value: string) => void;
   temperature: number;
   onTemperatureChange: (value: number) => void;
-  maxTokens: number;
-  onMaxTokensChange: (value: number) => void;
   onClearSession: () => void;
   tutorModes: TutorModePreset[];
   selectedTutorMode: TutorModePreset | null;
   onTutorModeSelect: (mode: TutorModePreset) => void;
+  modelOptions: Array<{ id: string; label?: string }>;
+  modelLoading: boolean;
+  modelError: string | null;
   buildFocus: BuildFocus;
   roadmapHighlights: string[];
 };
@@ -35,12 +36,13 @@ export const ChatSidebar = ({
   onSystemPromptChange,
   temperature,
   onTemperatureChange,
-  maxTokens,
-  onMaxTokensChange,
   onClearSession,
   tutorModes,
   selectedTutorMode,
   onTutorModeSelect,
+  modelOptions,
+  modelLoading,
+  modelError,
   buildFocus,
   roadmapHighlights,
 }: ChatSidebarProps) => {
@@ -93,7 +95,22 @@ export const ChatSidebar = ({
               value={model}
               onChange={(event) => onModelChange(event.target.value)}
               placeholder="Model id"
+              list="model-options"
             />
+            <datalist id="model-options">
+              {modelOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label ?? option.id}
+                </option>
+              ))}
+            </datalist>
+            <div className="text-[11px] text-foreground/50">
+              {modelLoading && "Loading models..."}
+              {!modelLoading && modelError && `Model list unavailable: ${modelError}`}
+              {!modelLoading && !modelError && modelOptions.length > 0 && (
+                <span>{modelOptions.length} models available</span>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -108,38 +125,22 @@ export const ChatSidebar = ({
             />
           </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-foreground/50">
-                Temperature
-                <span className="text-xs font-medium text-foreground/60">
-                  {temperature.toFixed(1)}
-                </span>
-              </label>
-              <input
-                className="w-full"
-                type="range"
-                min={0}
-                max={1.2}
-                step={0.1}
-                value={temperature}
-                onChange={(event) => onTemperatureChange(Number(event.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-foreground/50">
-                Max Tokens
-              </label>
-              <input
-                type="number"
-                min={64}
-                max={4096}
-                step={64}
-                value={maxTokens}
-                onChange={(event) => onMaxTokensChange(Number(event.target.value))}
-                className="w-full rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-foreground/80 outline-none transition-smooth focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/30"
-              />
-            </div>
+          <div className="space-y-2">
+            <label className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-foreground/50">
+              Temperature
+              <span className="text-xs font-medium text-foreground/60">
+                {temperature.toFixed(1)}
+              </span>
+            </label>
+            <input
+              className="w-full"
+              type="range"
+              min={0}
+              max={1.2}
+              step={0.1}
+              value={temperature}
+              onChange={(event) => onTemperatureChange(Number(event.target.value))}
+            />
           </div>
         </div>
       </details>
@@ -152,9 +153,6 @@ export const ChatSidebar = ({
         >
           Clear session
         </button>
-        <p className="text-xs text-foreground/50">
-          Add your API keys in `.env.local` before sending a prompt.
-        </p>
       </div>
 
       <div className="space-y-3">

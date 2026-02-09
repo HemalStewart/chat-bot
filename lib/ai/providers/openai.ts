@@ -26,7 +26,7 @@ export const sendOpenAIChat = async (payload: ChatRequest) => {
       model: payload.model,
       messages: payload.messages,
       temperature: payload.temperature ?? 0.7,
-      max_tokens: payload.maxTokens ?? 512,
+      max_tokens: payload.maxTokens ?? 2048,
     }),
   });
 

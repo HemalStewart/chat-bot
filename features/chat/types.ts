@@ -11,6 +11,7 @@ export type LocalMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sources?: Array<{ id: string; title: string; snippet: string }>;
 };
 
 export type ChatRequest = {

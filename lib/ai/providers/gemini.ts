@@ -12,37 +12,20 @@ type GeminiContent = {
 const normalizeGeminiModel = (model: string) => model.replace(/^models\//, "");
 
 const buildGeminiContents = (messages: ChatMessage[]): GeminiContent[] => {
-  const systemText = messages
-    .filter((message) => message.role === "system")
-    .map((message) => message.content.trim())
-    .filter(Boolean)
-    .join("\n\n");
-
   const nonSystemMessages = messages.filter((message) => message.role !== "system");
-  let mergedMessages = nonSystemMessages;
-
-  if (systemText) {
-    if (mergedMessages.length && mergedMessages[0].role === "user") {
-      mergedMessages = [
-        {
-          role: "user",
-          content: `System instructions:\n${systemText}\n\n${mergedMessages[0].content}`,
-        },
-        ...mergedMessages.slice(1),
-      ];
-    } else {
-      mergedMessages = [
-        { role: "user", content: `System instructions:\n${systemText}` },
-        ...mergedMessages,
-      ];
-    }
-  }
-
-  return mergedMessages.map((message) => ({
+  return nonSystemMessages.map((message) => ({
     role: message.role === "assistant" ? "model" : "user",
     parts: [{ text: message.content }],
   }));
 };
+
+const extractSystemInstruction = (messages: ChatMessage[]) =>
+  messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content.trim())
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
 
 const extractGeminiMessage = (data: unknown): string | null => {
   if (!data || typeof data !== "object") return null;
@@ -58,6 +41,7 @@ export const sendGeminiChat = async (payload: ChatRequest) => {
     throw new ApiError("GEMINI_API_KEY is not configured.", 400);
   }
 
+  const systemInstruction = extractSystemInstruction(payload.messages);
   const response = await fetch(
     `${GEMINI_BASE_URL}/${normalizeGeminiModel(payload.model)}:generateContent?key=${apiKey}`,
     {
@@ -65,9 +49,16 @@ export const sendGeminiChat = async (payload: ChatRequest) => {
       headers: jsonHeaders,
       body: JSON.stringify({
         contents: buildGeminiContents(payload.messages),
+        ...(systemInstruction
+          ? {
+              systemInstruction: {
+                parts: [{ text: systemInstruction }],
+              },
+            }
+          : {}),
         generationConfig: {
           temperature: payload.temperature ?? 0.7,
-          maxOutputTokens: payload.maxTokens ?? 512,
+          maxOutputTokens: payload.maxTokens ?? 2048,
         },
       }),
     }

@@ -1,22 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { sendChatRequest } from "@/features/chat/api";
-import { defaultModels, providerOptions } from "@/features/chat/constants";
+import { sendChatRequest, sendChatStream } from "@/features/chat/api";
+import { defaultMaxTokens, defaultModels, providerOptions } from "@/features/chat/constants";
 import type { ChatMessage, LocalMessage, Provider } from "@/features/chat/types";
 import type { TutorModePreset } from "@/features/tutor/types";
-
-const STORAGE_KEY = "ai-agent-browser.session.v1";
-
-type StoredSession = {
-  provider: Provider;
-  modelByProvider: Record<Provider, string>;
-  temperature: number;
-  maxTokens: number;
-  systemPrompt: string;
-  messages: LocalMessage[];
-  draft: string;
-};
+import type { ResponseLanguage } from "@/features/chat/components/LanguageToggle";
+import type { RagSource } from "@/features/rag/types";
+import { runLocalRag } from "@/features/rag/engine";
+import type { ContextDoc } from "@/features/rag/store";
+import {
+  appendChatMessage,
+  clearChatHistory,
+  loadChatHistory,
+} from "@/features/chat/history";
 
 const createMessageId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -29,7 +26,7 @@ export const useChatSession = () => {
     defaultModels
   );
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(512);
+  const [maxTokens, setMaxTokens] = useState(defaultMaxTokens);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [selectedTutorMode, setSelectedTutorMode] = useState<TutorModePreset | null>(null);
   const [messages, setMessages] = useState<LocalMessage[]>([]);
@@ -37,6 +34,11 @@ export const useChatSession = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [useRag, setUseRag] = useState(true);
+  const [ragSources, setRagSources] = useState<RagSource[]>([]);
+  const [ragFocusId, setRagFocusId] = useState<string | null>(null);
+  const [ragScope, setRagScope] = useState<"focused" | "all">("focused");
+  const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>("english");
 
   const model = modelByProvider[provider];
 
@@ -45,43 +47,29 @@ export const useChatSession = () => {
   }, [provider]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-
-    try {
-      const parsed = JSON.parse(raw) as StoredSession;
-      if (!parsed) return;
-      setProvider(parsed.provider ?? "openai");
-      setModelByProvider(parsed.modelByProvider ?? defaultModels);
-      setTemperature(parsed.temperature ?? 0.7);
-      setMaxTokens(parsed.maxTokens ?? 512);
-      setSystemPrompt(parsed.systemPrompt ?? "");
-      setMessages(parsed.messages ?? []);
-      setDraft(parsed.draft ?? "");
-    } catch (err) {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const payload: StoredSession = {
-      provider,
-      modelByProvider,
-      temperature,
-      maxTokens,
-      systemPrompt,
-      messages,
-      draft,
+    let active = true;
+    const load = async () => {
+      try {
+        const stored = await loadChatHistory();
+        if (!active) return;
+        setMessages(stored);
+      } catch (err) {
+        // Ignore history load errors for now.
+      }
     };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [provider, modelByProvider, temperature, maxTokens, systemPrompt, messages, draft]);
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const clearSession = () => {
     setMessages([]);
     setLatencyMs(null);
     setError(null);
+    setRagSources([]);
+    setRagFocusId(null);
+    clearChatHistory().catch(() => undefined);
   };
 
   const updateSystemPrompt = (value: string) => {
@@ -94,7 +82,7 @@ export const useChatSession = () => {
     setSystemPrompt(mode.systemPrompt);
   };
 
-  const sendMessage = async () => {
+  const sendMessage = async (docs?: ContextDoc[]) => {
     const trimmed = draft.trim();
     if (!trimmed || isLoading) return;
 
@@ -112,32 +100,121 @@ export const useChatSession = () => {
     setMessages(nextMessages);
     setDraft("");
 
+    appendChatMessage({ role: "user", content: trimmed }).catch(() => undefined);
+
     const apiMessages: ChatMessage[] = nextMessages.map((message) => ({
       role: message.role,
       content: message.content,
     }));
 
-    const payloadMessages = systemPrompt.trim()
-      ? [{ role: "system", content: systemPrompt.trim() }, ...apiMessages]
-      : apiMessages;
+    const languageInstruction =
+      responseLanguage === "english"
+        ? "Respond in English only."
+        : responseLanguage === "sinhala"
+        ? "Respond in Sinhala only, using Sinhala script."
+        : "Respond in Tamil only, using Tamil script.";
+
+    const systemMessages: ChatMessage[] = [];
+    if (systemPrompt.trim()) {
+      systemMessages.push({ role: "system", content: systemPrompt.trim() });
+    }
+
+    let payloadMessages = [...systemMessages, ...apiMessages];
+
+    let sources: RagSource[] = [];
+    const usableDocs =
+      ragScope === "focused" && ragFocusId
+        ? (docs ?? []).filter((doc) => doc.id === ragFocusId)
+        : docs ?? [];
+
+    if (useRag && usableDocs.length > 0) {
+      const rag = runLocalRag(usableDocs, { query: trimmed, scope: "page", topK: 4 });
+      sources = rag.sources;
+      setRagSources(sources);
+      payloadMessages = [...payloadMessages, { role: "system", content: rag.answer }];
+    }
+
+    // Ensure language instruction is always last so it wins.
+    payloadMessages = [...payloadMessages, { role: "system", content: languageInstruction }];
+
+    const assistantId = createMessageId();
+    setMessages((current) => [
+      ...current,
+      { id: assistantId, role: "assistant", content: "", sources },
+    ]);
+
+    let hasStreamed = false;
+    let assistantContent = "";
+
+    const appendToken = (token: string) => {
+      hasStreamed = true;
+      assistantContent += token;
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? { ...message, content: assistantContent, sources }
+            : message
+        )
+      );
+    };
 
     try {
-      const response = await sendChatRequest({
-        provider,
-        model,
-        temperature,
-        maxTokens,
-        messages: payloadMessages,
-      });
+      await sendChatStream(
+        {
+          provider,
+          model,
+          temperature,
+          maxTokens,
+          messages: payloadMessages,
+        },
+        appendToken
+      );
 
-      setMessages((current) => [
-        ...current,
-        { id: createMessageId(), role: "assistant", content: response.message },
-      ]);
+      if (!hasStreamed) {
+        throw new Error("Empty stream response.");
+      }
+
+      appendChatMessage({
+        role: "assistant",
+        content: assistantContent,
+        sources,
+      }).catch(() => undefined);
       setLatencyMs(Math.round(performance.now() - startedAt));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Request failed.";
-      setError(message);
+      if (!hasStreamed) {
+        try {
+          const response = await sendChatRequest({
+            provider,
+            model,
+            temperature,
+            maxTokens,
+            messages: payloadMessages,
+          });
+
+          assistantContent = response.message;
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: response.message, sources }
+                : message
+            )
+          );
+          appendChatMessage({
+            role: "assistant",
+            content: response.message,
+            sources,
+          }).catch(() => undefined);
+          setLatencyMs(Math.round(performance.now() - startedAt));
+        } catch (fallbackError) {
+          const message =
+            fallbackError instanceof Error ? fallbackError.message : "Request failed.";
+          setError(message);
+          setMessages((current) => current.filter((message) => message.id !== assistantId));
+        }
+      } else {
+        const message = err instanceof Error ? err.message : "Request failed.";
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -162,6 +239,15 @@ export const useChatSession = () => {
     isLoading,
     latencyMs,
     providerHint,
+    useRag,
+    setUseRag,
+    ragSources,
+    ragFocusId,
+    setRagFocusId,
+    ragScope,
+    setRagScope,
+    responseLanguage,
+    setResponseLanguage,
     selectedTutorMode,
     updateSystemPrompt,
     applyTutorMode,
