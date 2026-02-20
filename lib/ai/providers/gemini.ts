@@ -9,6 +9,17 @@ type GeminiContent = {
   parts: { text: string }[];
 };
 
+type GeminiApiResponse = {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+  promptFeedback?: {
+    blockReason?: string;
+    blockReasonMessage?: string;
+  };
+};
+
 const normalizeGeminiModel = (model: string) => model.replace(/^models\//, "");
 
 const buildGeminiContents = (messages: ChatMessage[]): GeminiContent[] => {
@@ -29,10 +40,37 @@ const extractSystemInstruction = (messages: ChatMessage[]) =>
 
 const extractGeminiMessage = (data: unknown): string | null => {
   if (!data || typeof data !== "object") return null;
-  const response = data as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  return response.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+  const response = data as GeminiApiResponse;
+  const text = (response.candidates ?? [])
+    .flatMap((candidate) => candidate.content?.parts ?? [])
+    .map((part) => part.text ?? "")
+    .join("")
+    .trim();
+  return text || null;
+};
+
+const extractGeminiReason = (data: unknown): { message: string; status: number } | null => {
+  if (!data || typeof data !== "object") return null;
+  const response = data as GeminiApiResponse;
+  const blockReason = response.promptFeedback?.blockReason;
+  if (blockReason) {
+    return {
+      message:
+        response.promptFeedback?.blockReasonMessage ??
+        `Gemini blocked this response (${blockReason}). Rephrase and try again.`,
+      status: 400,
+    };
+  }
+
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (finishReason && finishReason !== "STOP") {
+    return {
+      message: `Gemini finished without text (${finishReason}). Try a shorter or clearer prompt.`,
+      status: 502,
+    };
+  }
+
+  return null;
 };
 
 export const sendGeminiChat = async (payload: ChatRequest) => {
@@ -64,7 +102,7 @@ export const sendGeminiChat = async (payload: ChatRequest) => {
     }
   );
 
-  const data = await response.json();
+  const data = (await response.json()) as GeminiApiResponse;
   if (!response.ok) {
     const errorMessage =
       (data as { error?: { message?: string } })?.error?.message ??
@@ -74,7 +112,11 @@ export const sendGeminiChat = async (payload: ChatRequest) => {
 
   const message = extractGeminiMessage(data);
   if (!message) {
-    throw new ApiError("Gemini response did not include a message.", 502);
+    const reason = extractGeminiReason(data);
+    throw new ApiError(
+      reason?.message ?? "Gemini returned an empty response. Please try again.",
+      reason?.status ?? 502
+    );
   }
 
   return message;

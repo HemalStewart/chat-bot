@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { LocalMessage } from "@/features/chat/types";
 import { CitationList } from "@/features/chat/components/CitationList";
 import { MarkdownMessage } from "@/features/chat/components/MarkdownMessage";
@@ -46,6 +46,16 @@ ChatMessageBubble.displayName = "ChatMessageBubble";
 export const ChatTranscript = ({ messages, isLoading, error }: ChatTranscriptProps) => {
   const hasMessages = messages.length > 0;
   const lastMessageId = messages[messages.length - 1]?.id;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTo({
+      top: node.scrollHeight,
+      behavior: isLoading ? "auto" : "smooth",
+    });
+  }, [messages, isLoading]);
 
   return (
     <div className="glass-panel flex flex-1 flex-col gap-4 overflow-hidden rounded-3xl p-5">
@@ -53,7 +63,7 @@ export const ChatTranscript = ({ messages, isLoading, error }: ChatTranscriptPro
         <h2 className="text-lg font-semibold text-foreground">Transcript</h2>
         <span className="text-xs text-foreground/50">{messages.length} turns</span>
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto pr-2">
         {!hasMessages && (
           <div className="rounded-2xl border border-dashed border-white/70 bg-white/50 p-6 text-sm text-foreground/60">
             Send your first prompt to begin the conversation.

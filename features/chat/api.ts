@@ -60,7 +60,10 @@ export const sendChatStream = async (
       }
 
       try {
-        const parsed = JSON.parse(data) as { token?: string; done?: boolean };
+        const parsed = JSON.parse(data) as { token?: string; done?: boolean; error?: string };
+        if (parsed.error) {
+          throw new Error(parsed.error);
+        }
         if (parsed.token) {
           onToken(parsed.token);
         }
@@ -68,7 +71,9 @@ export const sendChatStream = async (
           return;
         }
       } catch (err) {
-        // Ignore malformed chunks
+        if (err instanceof Error) {
+          throw err;
+        }
       }
     }
   }

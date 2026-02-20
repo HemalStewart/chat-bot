@@ -10,6 +10,11 @@ export type ContextDoc = {
   createdAt: string;
 };
 
+const upsertDocAtTop = (current: ContextDoc[], next: ContextDoc) => [
+  next,
+  ...current.filter((doc) => doc.id !== next.id),
+];
+
 const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(url, init);
   const text = await response.text();
@@ -61,7 +66,7 @@ export const useContextStore = () => {
       body: JSON.stringify({ title, content: trimmed }),
     });
 
-    setDocs((current) => [data.doc, ...current]);
+    setDocs((current) => upsertDocAtTop(current, data.doc));
     return data.doc;
   };
 
@@ -87,7 +92,7 @@ export const useContextStore = () => {
       if (!response.ok || !data.doc) {
         throw new Error(data.error ?? "PDF upload failed.");
       }
-      setDocs((current) => [data.doc!, ...current]);
+      setDocs((current) => upsertDocAtTop(current, data.doc!));
       return data.doc;
     } catch (error) {
       const message = error instanceof Error ? error.message : "PDF upload failed.";

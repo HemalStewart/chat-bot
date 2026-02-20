@@ -24,17 +24,12 @@ export const extractPdfTextWithOcr = async (
   lang?: string,
   maxPages: number = DEFAULT_MAX_PAGES
 ): Promise<OcrResult> => {
-  const document = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
+  const document = await pdfjsLib.getDocument({ data: buffer }).promise;
   const totalPages = document.numPages;
   const pagesToProcess = Math.min(totalPages, maxPages);
 
-  const worker = await createWorker({
-    logger: () => undefined,
-  });
-
   const ocrLang = pickLang(lang);
-  await worker.loadLanguage(ocrLang);
-  await worker.initialize(ocrLang);
+  const worker = await createWorker(ocrLang);
 
   let combinedText = "";
 
@@ -44,7 +39,10 @@ export const extractPdfTextWithOcr = async (
     const canvas = createCanvas(viewport.width, viewport.height);
     const context = canvas.getContext("2d");
 
-    await page.render({ canvasContext: context as any, viewport }).promise;
+    await page.render({
+      canvasContext: context as unknown as CanvasRenderingContext2D,
+      viewport,
+    }).promise;
     const image = canvas.toBuffer("image/png");
 
     const result = await worker.recognize(image);

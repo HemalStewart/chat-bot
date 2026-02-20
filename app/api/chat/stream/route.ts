@@ -14,6 +14,17 @@ type GeminiContent = {
   parts: { text: string }[];
 };
 
+type GeminiStreamEvent = {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+  promptFeedback?: {
+    blockReason?: string;
+    blockReasonMessage?: string;
+  };
+};
+
 const buildGeminiContents = (messages: ChatMessage[]): GeminiContent[] => {
   const nonSystemMessages = messages.filter((message) => message.role !== "system");
   return nonSystemMessages.map((message) => ({
@@ -29,6 +40,38 @@ const extractSystemInstruction = (messages: ChatMessage[]) =>
     .filter(Boolean)
     .join("\n\n")
     .trim();
+
+const extractGeminiStreamText = (event: unknown): string => {
+  if (!event || typeof event !== "object") return "";
+  const parsed = event as GeminiStreamEvent;
+  return (parsed.candidates ?? [])
+    .flatMap((candidate) => candidate.content?.parts ?? [])
+    .map((part) => part.text ?? "")
+    .join("");
+};
+
+const extractGeminiStreamReason = (event: unknown): { message: string; status: number } | null => {
+  if (!event || typeof event !== "object") return null;
+  const parsed = event as GeminiStreamEvent;
+  const blockReason = parsed.promptFeedback?.blockReason;
+  if (blockReason) {
+    return {
+      message:
+        parsed.promptFeedback?.blockReasonMessage ??
+        `Gemini blocked this response (${blockReason}). Rephrase and try again.`,
+      status: 400,
+    };
+  }
+
+  const finishReason = parsed.candidates?.[0]?.finishReason;
+  if (finishReason && finishReason !== "STOP") {
+    return {
+      message: `Gemini finished without text (${finishReason}). Try a shorter or clearer prompt.`,
+      status: 502,
+    };
+  }
+  return null;
+};
 
 const createEventStream = (
   handler: (controller: ReadableStreamDefaultController<Uint8Array>) => Promise<void>
@@ -170,6 +213,8 @@ const streamGemini = async (
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let emittedToken = false;
+  let latestEvent: unknown = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -189,17 +234,25 @@ const streamGemini = async (
       }
 
       try {
-        const json = JSON.parse(data) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
-        const token = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        const json = JSON.parse(data) as GeminiStreamEvent;
+        latestEvent = json;
+        const token = extractGeminiStreamText(json);
         if (token) {
+          emittedToken = true;
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
         }
       } catch (error) {
         // Ignore malformed chunks
       }
     }
+  }
+
+  if (!emittedToken) {
+    const reason = extractGeminiStreamReason(latestEvent);
+    throw new ApiError(
+      reason?.message ?? "Gemini returned an empty stream response.",
+      reason?.status ?? 502
+    );
   }
 };
 
@@ -219,7 +272,7 @@ export async function POST(request: NextRequest) {
   }
 
   const stream = createEventStream(async (controller) => {
-    if (payload.provider === "openai") {
+    if (payload.provider === "openai" || payload.provider === "claude") {
       await streamOpenAI(payload, controller);
       return;
     }

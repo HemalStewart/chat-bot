@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { AppHeader } from "@/features/ai-browser/components/AppHeader";
 import { buildFocus, heroCopy, roadmapHighlights } from "@/features/ai-browser/constants";
 import { ChatComposer } from "@/features/chat/components/ChatComposer";
@@ -8,20 +7,15 @@ import { ChatSidebar } from "@/features/chat/components/ChatSidebar";
 import { ChatTranscript } from "@/features/chat/components/ChatTranscript";
 import { LanguageToggle } from "@/features/chat/components/LanguageToggle";
 import { useChatSession } from "@/features/chat/hooks/useChatSession";
-import { useModelList } from "@/features/chat/hooks/useModelList";
-import { ContextPanel } from "@/features/rag/components/ContextPanel";
 import { ContextScopeToggle } from "@/features/rag/components/ContextScopeToggle";
 import { ContextToggle } from "@/features/rag/components/ContextToggle";
+import { UploadPdfPanel } from "@/features/rag/components/UploadPdfPanel";
 import { useContextStore } from "@/features/rag/store";
 import { PastPaperPanel } from "@/features/papers/components/PastPaperPanel";
 import { tutorModePresets } from "@/features/tutor/presets";
 
 export const AiBrowserAgentApp = () => {
   const {
-    provider,
-    setProvider,
-    model,
-    setModelByProvider,
     systemPrompt,
     updateSystemPrompt,
     temperature,
@@ -45,9 +39,7 @@ export const AiBrowserAgentApp = () => {
     responseLanguage,
     setResponseLanguage,
   } = useChatSession();
-  const modelList = useModelList(provider);
   const contextStore = useContextStore();
-  const [rightPanelTab, setRightPanelTab] = useState<"context" | "papers">("context");
 
   return (
     <div className="h-screen w-screen p-6 text-foreground">
@@ -76,15 +68,6 @@ export const AiBrowserAgentApp = () => {
 
         <section className="grid flex-1 gap-6 overflow-hidden lg:grid-cols-[320px_1fr_320px]">
           <ChatSidebar
-            provider={provider}
-            onProviderChange={setProvider}
-            model={model}
-            onModelChange={(value) =>
-              setModelByProvider((current) => ({
-                ...current,
-                [provider]: value,
-              }))
-            }
             systemPrompt={systemPrompt}
             onSystemPromptChange={updateSystemPrompt}
             temperature={temperature}
@@ -93,9 +76,6 @@ export const AiBrowserAgentApp = () => {
             tutorModes={tutorModePresets}
             selectedTutorMode={selectedTutorMode}
             onTutorModeSelect={applyTutorMode}
-            modelOptions={modelList.models}
-            modelLoading={modelList.isLoading}
-            modelError={modelList.error}
             buildFocus={buildFocus}
             roadmapHighlights={roadmapHighlights}
           />
@@ -111,59 +91,33 @@ export const AiBrowserAgentApp = () => {
           </div>
 
           <div className="flex h-full flex-col gap-5 overflow-y-auto pr-1">
-            <div className="glass-panel sticky top-0 z-10 flex items-center justify-between rounded-3xl p-3 text-xs text-foreground/70">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRightPanelTab("context")}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-spring ${
-                    rightPanelTab === "context"
-                      ? "bg-blue-500 text-white"
-                      : "bg-white/60 text-foreground/70"
-                  }`}
-                >
-                  Context
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRightPanelTab("papers")}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-spring ${
-                    rightPanelTab === "papers"
-                      ? "bg-blue-500 text-white"
-                      : "bg-white/60 text-foreground/70"
-                  }`}
-                >
-                  Past Papers
-                </button>
-              </div>
-            </div>
-
-            {rightPanelTab === "context" ? (
-              <ContextPanel
-                docs={contextStore.docs}
-                onAdd={contextStore.addDoc}
-                onRemove={contextStore.removeDoc}
-                onClear={contextStore.clearDocs}
-                onUploadPdf={contextStore.uploadPdf}
-                uploading={contextStore.uploading}
-                uploadError={contextStore.uploadError}
-                responseLanguage={responseLanguage}
-              />
-            ) : (
-              <PastPaperPanel
-                onSendToChat={async (prompt, context) => {
-                  setDraft(prompt);
-                  setUseRag(true);
-                  setRagScope("focused");
-                  if (context) {
-                    const doc = await contextStore.addDoc(context.title, context.content);
-                    if (doc?.id) {
-                      setRagFocusId(doc.id);
-                    }
+            <UploadPdfPanel
+              docs={contextStore.docs}
+              onUploadPdf={contextStore.uploadPdf}
+              onUploadComplete={(doc) => {
+                setUseRag(true);
+                setRagScope("focused");
+                setRagFocusId(doc.id);
+              }}
+              onRemove={contextStore.removeDoc}
+              onClear={contextStore.clearDocs}
+              uploading={contextStore.uploading}
+              uploadError={contextStore.uploadError}
+              responseLanguage={responseLanguage}
+            />
+            <PastPaperPanel
+              onSendToChat={async (prompt, context) => {
+                setDraft(prompt);
+                setUseRag(true);
+                setRagScope("focused");
+                if (context) {
+                  const doc = await contextStore.addDoc(context.title, context.content);
+                  if (doc?.id) {
+                    setRagFocusId(doc.id);
                   }
-                }}
-              />
-            )}
+                }
+              }}
+            />
           </div>
         </section>
       </div>

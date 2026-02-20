@@ -1,5 +1,3 @@
-import type { Provider } from "@/features/chat/types";
-import { providerOptions } from "@/features/chat/constants";
 import type { TutorModePreset } from "@/features/tutor/types";
 
 export type BuildFocus = {
@@ -8,10 +6,6 @@ export type BuildFocus = {
 };
 
 export type ChatSidebarProps = {
-  provider: Provider;
-  onProviderChange: (provider: Provider) => void;
-  model: string;
-  onModelChange: (model: string) => void;
   systemPrompt: string;
   onSystemPromptChange: (value: string) => void;
   temperature: number;
@@ -20,18 +14,11 @@ export type ChatSidebarProps = {
   tutorModes: TutorModePreset[];
   selectedTutorMode: TutorModePreset | null;
   onTutorModeSelect: (mode: TutorModePreset) => void;
-  modelOptions: Array<{ id: string; label?: string }>;
-  modelLoading: boolean;
-  modelError: string | null;
   buildFocus: BuildFocus;
   roadmapHighlights: string[];
 };
 
 export const ChatSidebar = ({
-  provider,
-  onProviderChange,
-  model,
-  onModelChange,
   systemPrompt,
   onSystemPromptChange,
   temperature,
@@ -40,9 +27,6 @@ export const ChatSidebar = ({
   tutorModes,
   selectedTutorMode,
   onTutorModeSelect,
-  modelOptions,
-  modelLoading,
-  modelError,
   buildFocus,
   roadmapHighlights,
 }: ChatSidebarProps) => {
@@ -51,31 +35,8 @@ export const ChatSidebar = ({
       <div className="space-y-2">
         <h2 className="text-lg font-semibold text-foreground">Session</h2>
         <p className="text-xs text-foreground/60">
-          Configure routing and learning mode before sending prompts.
+          Session controls for tutoring and response behavior.
         </p>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-foreground/50">
-          Provider
-        </label>
-        <div className="grid gap-2">
-          {providerOptions.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onProviderChange(option.id)}
-              className={`liquid-hover flex items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-spring ${
-                provider === option.id
-                  ? "border-blue-400/70 bg-blue-500 text-white"
-                  : "border-white/70 bg-white/60 text-foreground/70 hover:text-foreground"
-              }`}
-            >
-              <span className="font-semibold">{option.label}</span>
-              <span className="text-xs opacity-70">{option.hint}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       <details className="rounded-2xl border border-white/70 bg-white/60 p-4">
@@ -83,36 +44,9 @@ export const ChatSidebar = ({
           Advanced settings
         </summary>
         <p className="mt-2 text-xs text-foreground/60">
-          Keep defaults unless you need custom routing or prompt control.
+          Routing is automatic. Adjust only tutor instructions and response style.
         </p>
         <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-foreground/50">
-              Model
-            </label>
-            <input
-              className="w-full rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-foreground/80 outline-none transition-smooth focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/30"
-              value={model}
-              onChange={(event) => onModelChange(event.target.value)}
-              placeholder="Model id"
-              list="model-options"
-            />
-            <datalist id="model-options">
-              {modelOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label ?? option.id}
-                </option>
-              ))}
-            </datalist>
-            <div className="text-[11px] text-foreground/50">
-              {modelLoading && "Loading models..."}
-              {!modelLoading && modelError && `Model list unavailable: ${modelError}`}
-              {!modelLoading && !modelError && modelOptions.length > 0 && (
-                <span>{modelOptions.length} models available</span>
-              )}
-            </div>
-          </div>
-
           <div className="space-y-2">
             <label className="text-[11px] font-semibold uppercase tracking-[0.3em] text-foreground/50">
               System Prompt

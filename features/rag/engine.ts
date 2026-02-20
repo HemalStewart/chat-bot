@@ -4,7 +4,7 @@ import type { ContextDoc } from "@/features/rag/store";
 const tokenize = (value: string) =>
   value
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
 
@@ -35,7 +35,8 @@ export const runLocalRag = (docs: ContextDoc[], query: RagQuery): RagResult => {
   for (const doc of docs) {
     const chunks = chunkText(doc.content);
     for (const chunk of chunks) {
-      const score = scoreChunk(queryTokens, tokenize(chunk));
+      const searchableChunk = `${doc.title}\n${chunk}`;
+      const score = scoreChunk(queryTokens, tokenize(searchableChunk));
       if (score > 0) {
         scored.push({ score, chunk, doc });
       }
@@ -43,7 +44,13 @@ export const runLocalRag = (docs: ContextDoc[], query: RagQuery): RagResult => {
   }
 
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, query.topK ?? 4);
+  const fallback =
+    scored.length === 0
+      ? docs
+          .slice(0, query.topK ?? 4)
+          .map((doc) => ({ score: 0, chunk: chunkText(doc.content, 1000, 120)[0] ?? doc.content, doc }))
+      : [];
+  const top = (scored.length > 0 ? scored : fallback).slice(0, query.topK ?? 4);
 
   const sources: RagSource[] = top.map((item, index) => ({
     id: item.doc.id,
@@ -56,7 +63,7 @@ export const runLocalRag = (docs: ContextDoc[], query: RagQuery): RagResult => {
     ? [
         "You MUST answer using ONLY the context below.",
         "Do NOT say you lack access to papers or sources.",
-        "If the context is insufficient, ask the user to add more sources.",
+        "Treat the provided context as the primary source for the answer.",
         "Provide a clear, step-by-step solution with headings and bullet points.",
         "Keep units and show final answers clearly.",
         "",

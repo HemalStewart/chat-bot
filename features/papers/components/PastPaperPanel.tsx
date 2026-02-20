@@ -173,6 +173,8 @@ export const PastPaperPanel = ({ onSendToChat }: PastPaperPanelProps) => {
                   type="button"
                   onClick={() => {
                     const contextContent = [
+                      `Paper: ${paperMeta}`,
+                      `Question Number: Q${selectedQuestion.number}`,
                       `Question: ${selectedQuestion.prompt}`,
                       scheme ? `Marking Scheme: ${scheme.scheme}` : null,
                     ]

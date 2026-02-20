@@ -20,6 +20,22 @@ const createMessageId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+const CALCULATION_PATTERN =
+  /\b(calculate|calculation|solve|derive|derivation|equation|numerical|compute|acceleration|velocity|current|voltage|resistance|power|force|energy|momentum|units?)\b/i;
+const SUMMARY_PATTERN =
+  /\b(summary|summarize|summarise|brief|key points?|recap|outline|short note|bullet points?|paraphrase)\b/i;
+const MATH_SYMBOL_PATTERN = /[=+\-*/^]|\\frac|\\sqrt|\d+\s?(m\/s|kg|n|j|v|a|w|ohm|%)\b/i;
+
+const pickProviderForPrompt = (
+  prompt: string,
+  responseLanguage: ResponseLanguage
+): Provider => {
+  if (responseLanguage === "sinhala") return "gemini";
+  if (CALCULATION_PATTERN.test(prompt) || MATH_SYMBOL_PATTERN.test(prompt)) return "openai";
+  if (SUMMARY_PATTERN.test(prompt)) return "claude";
+  return "claude";
+};
+
 export const useChatSession = () => {
   const [provider, setProvider] = useState<Provider>("openai");
   const [modelByProvider, setModelByProvider] = useState<Record<Provider, string>>(
@@ -39,11 +55,10 @@ export const useChatSession = () => {
   const [ragFocusId, setRagFocusId] = useState<string | null>(null);
   const [ragScope, setRagScope] = useState<"focused" | "all">("focused");
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>("english");
-
   const model = modelByProvider[provider];
 
   const providerHint = useMemo(() => {
-    return providerOptions.find((option) => option.id === provider)?.hint ?? "";
+    return providerOptions.find((option) => option.id === provider)?.label ?? "";
   }, [provider]);
 
   useEffect(() => {
@@ -96,6 +111,10 @@ export const useChatSession = () => {
       content: trimmed,
     };
 
+    const selectedProvider = pickProviderForPrompt(trimmed, responseLanguage);
+    const selectedModel = modelByProvider[selectedProvider];
+    setProvider(selectedProvider);
+
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setDraft("");
@@ -128,10 +147,37 @@ export const useChatSession = () => {
         : docs ?? [];
 
     if (useRag && usableDocs.length > 0) {
-      const rag = runLocalRag(usableDocs, { query: trimmed, scope: "page", topK: 4 });
-      sources = rag.sources;
-      setRagSources(sources);
-      payloadMessages = [...payloadMessages, { role: "system", content: rag.answer }];
+      if (ragScope === "focused" && usableDocs.length === 1) {
+        const focused = usableDocs[0];
+        sources = [
+          {
+            id: focused.id,
+            title: focused.title,
+            snippet: focused.content.slice(0, 260),
+          },
+        ];
+        setRagSources(sources);
+        payloadMessages = [
+          ...payloadMessages,
+          {
+            role: "system",
+            content: [
+              "You MUST answer using ONLY the focused context below.",
+              "Do NOT say you lack access to papers or sources.",
+              "Treat the focused context as sufficient for the answer.",
+              "Provide a step-by-step solution and include marks allocation when available.",
+              "",
+              `Focused Source: ${focused.title}`,
+              focused.content,
+            ].join("\n"),
+          },
+        ];
+      } else {
+        const rag = runLocalRag(usableDocs, { query: trimmed, scope: "page", topK: 4 });
+        sources = rag.sources;
+        setRagSources(sources);
+        payloadMessages = [...payloadMessages, { role: "system", content: rag.answer }];
+      }
     }
 
     // Ensure language instruction is always last so it wins.
@@ -147,9 +193,11 @@ export const useChatSession = () => {
     let assistantContent = "";
     let pendingContent = "";
     let rafId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const flushPending = () => {
       rafId = null;
+      timeoutId = null;
       if (!pendingContent) return;
       assistantContent += pendingContent;
       pendingContent = "";
@@ -163,11 +211,11 @@ export const useChatSession = () => {
     };
 
     const scheduleFlush = () => {
-      if (rafId !== null) return;
-      if (typeof window !== "undefined" && "requestAnimationFrame" in window) {
+      if (rafId !== null || timeoutId !== null) return;
+      if (typeof window !== "undefined") {
         rafId = window.requestAnimationFrame(flushPending);
       } else {
-        rafId = window.setTimeout(flushPending, 16) as unknown as number;
+        timeoutId = setTimeout(flushPending, 16);
       }
     };
 
@@ -179,12 +227,14 @@ export const useChatSession = () => {
 
     const finalizeStream = () => {
       if (rafId !== null) {
-        if (typeof window !== "undefined" && "cancelAnimationFrame" in window) {
+        if (typeof window !== "undefined") {
           window.cancelAnimationFrame(rafId);
-        } else {
-          clearTimeout(rafId);
         }
         rafId = null;
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
       if (pendingContent) {
         assistantContent += pendingContent;
@@ -202,8 +252,8 @@ export const useChatSession = () => {
     try {
       await sendChatStream(
         {
-          provider,
-          model,
+          provider: selectedProvider,
+          model: selectedModel,
           temperature,
           maxTokens,
           messages: payloadMessages,
@@ -226,8 +276,8 @@ export const useChatSession = () => {
       if (!hasStreamed) {
         try {
           const response = await sendChatRequest({
-            provider,
-            model,
+            provider: selectedProvider,
+            model: selectedModel,
             temperature,
             maxTokens,
             messages: payloadMessages,

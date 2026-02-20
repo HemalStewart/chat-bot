@@ -8,7 +8,7 @@ export const routeChat = async (payload: ChatRequest): Promise<ChatResponse> => 
     throw new ApiError("Missing provider, model, or messages.", 400);
   }
 
-  if (payload.provider === "openai") {
+  if (payload.provider === "openai" || payload.provider === "claude") {
     const message = await sendOpenAIChat(payload);
     return { message, provider: payload.provider, model: payload.model };
   }

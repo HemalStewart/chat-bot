@@ -6,6 +6,8 @@ import { extractPdfTextWithOcr } from "@/lib/ocr/pdfOcr";
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const MIN_TEXT_LENGTH = 200;
 const MIN_MEANINGFUL_RATIO = 0.35;
+const SINHALA_SCRIPT_REGEX = /[\u0D80-\u0DFF]/u;
+const TAMIL_SCRIPT_REGEX = /[\u0B80-\u0BFF]/u;
 
 const isLikelyGarbled = (value: string) => {
   if (!value) return true;
@@ -16,6 +18,12 @@ const isLikelyGarbled = (value: string) => {
   const meaningful = letters + digits;
   const ratio = meaningful / Math.max(1, normalized.length);
   return ratio < MIN_MEANINGFUL_RATIO;
+};
+
+const hasExpectedScript = (value: string, lang: string) => {
+  if (lang === "sin") return SINHALA_SCRIPT_REGEX.test(value);
+  if (lang === "tam") return TAMIL_SCRIPT_REGEX.test(value);
+  return true;
 };
 
 export async function POST(request: NextRequest) {
@@ -40,9 +48,15 @@ export async function POST(request: NextRequest) {
     const parsed = await pdfParse(buffer);
     let text = (parsed.text ?? "").trim();
 
-    if (ocrEnabled && isLikelyGarbled(text)) {
+    const needsScriptAwareOcr =
+      (ocrLang === "sin" || ocrLang === "tam") && !hasExpectedScript(text, ocrLang);
+
+    if (ocrEnabled && (isLikelyGarbled(text) || needsScriptAwareOcr)) {
       const ocr = await extractPdfTextWithOcr(buffer, ocrLang);
-      text = ocr.text?.trim() || text;
+      const ocrText = ocr.text?.trim() ?? "";
+      if (ocrText) {
+        text = ocrText;
+      }
     }
 
     if (!text) {
@@ -52,9 +66,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const title = file.name || "PDF Upload";
+    const existing = await prisma.contextDoc.findFirst({
+      where: {
+        title,
+        content: text,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existing) {
+      return NextResponse.json({ doc: existing });
+    }
+
     const doc = await prisma.contextDoc.create({
       data: {
-        title: file.name || "PDF Upload",
+        title,
         content: text,
       },
     });

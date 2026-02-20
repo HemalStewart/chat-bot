@@ -1,17 +1,11 @@
-import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { ContextDoc } from "@/features/rag/store";
-import type { ResponseLanguage } from "@/features/chat/components/LanguageToggle";
 
 export type ContextPanelProps = {
   docs: ContextDoc[];
   onAdd: (title: string, content: string) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
-  onUploadPdf: (file: File, options: { useOcr: boolean; lang: string }) => Promise<ContextDoc | undefined>;
-  uploading: boolean;
-  uploadError: string | null;
-  responseLanguage: ResponseLanguage;
 };
 
 export const ContextPanel = ({
@@ -19,20 +13,7 @@ export const ContextPanel = ({
   onAdd,
   onRemove,
   onClear,
-  onUploadPdf,
-  uploading,
-  uploadError,
-  responseLanguage,
 }: ContextPanelProps) => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [useOcr, setUseOcr] = useState(true);
-
-  const ocrLang = useMemo(() => {
-    if (responseLanguage === "sinhala") return "sin";
-    if (responseLanguage === "tamil") return "tam";
-    return "eng";
-  }, [responseLanguage]);
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -41,12 +22,6 @@ export const ContextPanel = ({
     const content = String(formData.get("content") ?? "");
     onAdd(title, content);
     form.reset();
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-    await onUploadPdf(selectedFile, { useOcr, lang: ocrLang });
-    setSelectedFile(null);
   };
 
   return (
@@ -76,41 +51,6 @@ export const ContextPanel = ({
           Add source
         </button>
       </form>
-
-      <div className="rounded-2xl border border-white/70 bg-white/60 p-3 text-xs text-foreground/70">
-        <p className="text-xs font-semibold text-foreground/70">Upload PDF</p>
-        <p className="mt-1 text-[11px] text-foreground/50">
-          Extracts text and stores it in the context library.
-        </p>
-        <div className="mt-3 flex flex-col gap-2">
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              setSelectedFile(file);
-            }}
-            className="text-xs"
-          />
-          <label className="flex items-center gap-2 text-[11px] text-foreground/60">
-            <input
-              type="checkbox"
-              checked={useOcr}
-              onChange={(event) => setUseOcr(event.target.checked)}
-            />
-            Use OCR for scanned PDFs (language: {ocrLang})
-          </label>
-          <button
-            type="button"
-            disabled={!selectedFile || uploading}
-            onClick={handleUpload}
-            className="liquid-hover rounded-2xl bg-blue-500 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-blue-300"
-          >
-            {uploading ? "Uploading..." : "Upload PDF"}
-          </button>
-          {uploadError && <p className="text-[11px] text-rose-500">{uploadError}</p>}
-        </div>
-      </div>
 
       <div className="flex items-center justify-between text-xs text-foreground/60">
         <span>{docs.length} sources</span>

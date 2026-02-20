@@ -1,4 +1,4 @@
-export type Provider = "openai" | "gemini";
+export type Provider = "openai" | "gemini" | "claude";
 
 export type ChatMessageRole = "system" | "user" | "assistant";
 

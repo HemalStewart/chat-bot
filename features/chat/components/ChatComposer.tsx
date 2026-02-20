@@ -10,6 +10,7 @@ export type ChatComposerProps = {
 
 export const ChatComposer = memo(
   ({ draft, onDraftChange, onSend, isLoading }: ChatComposerProps) => {
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSend();

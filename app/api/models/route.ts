@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   const provider = request.nextUrl.searchParams.get("provider");
 
   try {
-    if (provider === "openai") {
+    if (provider === "openai" || provider === "claude") {
       const models = await getOpenAIModels();
       return NextResponse.json({ models });
     }
